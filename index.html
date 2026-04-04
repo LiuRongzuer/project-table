@@ -1,0 +1,653 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>项目收支表（支持已付分笔 + 加减公式）</title>
+  <style>
+    :root{
+      --bg:#f6f7fb;
+      --card:#fff;
+      --line:#e6e8ef;
+      --text:#1f2430;
+      --muted:#6b7280;
+      --warn:#b42318;
+      --warn-bg:#fff1f0;
+      --ok:#027a48;
+      --brand:#2563eb;
+      --head:#f59e0b;
+    }
+    *{box-sizing:border-box;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"PingFang SC","Microsoft YaHei",sans-serif;}
+    body{margin:0;background:var(--bg);color:var(--text);}
+    header{padding:18px 16px;}
+    .wrap{max-width:1200px;margin:0 auto;padding:0 16px 28px;}
+    .toolbar{
+      display:flex;gap:10px;flex-wrap:wrap;align-items:center;
+      background:var(--card);border:1px solid var(--line);border-radius:12px;
+      padding:12px 12px;margin-bottom:12px;
+    }
+    .toolbar input{
+      border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:260px;
+      outline:none;
+    }
+    .toolbar button{
+      border:1px solid var(--line);background:#fff;border-radius:10px;padding:10px 12px;cursor:pointer;
+    }
+    .toolbar button.primary{background:var(--brand);border-color:var(--brand);color:#fff;}
+    .hint{color:var(--muted);font-size:12px;margin-left:auto}
+    .card{
+      background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden;
+    }
+    table{width:100%;border-collapse:separate;border-spacing:0;}
+    thead th{
+      background:linear-gradient(#fbbf24,#f59e0b);
+      color:#111827;font-weight:700;font-size:13px;
+      padding:12px 10px;border-bottom:1px solid rgba(0,0,0,.08);
+      text-align:center;white-space:nowrap;
+    }
+    tbody td{
+      padding:10px 10px;border-bottom:1px solid var(--line);font-size:13px;vertical-align:middle;
+    }
+    tbody tr:hover{background:#f8fafc;}
+    td.num{text-align:right;font-variant-numeric:tabular-nums;}
+    td.center{text-align:center;}
+    .link{
+      color:var(--brand);cursor:pointer;text-decoration:underline;text-underline-offset:2px;
+    }
+    .badge{
+      display:inline-flex;align-items:center;gap:6px;
+      padding:2px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);background:#fff;
+      color:var(--muted);
+    }
+    .row-warn{background:var(--warn-bg);}
+    .row-warn td{border-bottom-color:#ffd2cf;}
+    .neg{color:var(--warn);font-weight:700;}
+    .pos{color:var(--ok);font-weight:700;}
+
+    /* drawer/modal */
+    .overlay{
+      position:fixed;inset:0;background:rgba(15,23,42,.45);
+      display:none;align-items:flex-start;justify-content:center;padding:24px;
+    }
+    .overlay.open{display:flex;}
+    .modal{
+      width:min(980px,100%);
+      background:var(--card);border-radius:14px;border:1px solid var(--line);
+      box-shadow:0 20px 80px rgba(0,0,0,.25);
+      overflow:hidden;
+    }
+    .modal header{
+      display:flex;align-items:center;justify-content:space-between;gap:12px;
+      padding:14px 14px;border-bottom:1px solid var(--line);
+      background:#fff;
+    }
+    .modal h2{margin:0;font-size:16px;}
+    .modal .close{
+      border:1px solid var(--line);background:#fff;border-radius:10px;padding:8px 10px;cursor:pointer;
+    }
+    .modal .content{padding:14px;}
+    .grid{
+      display:grid;grid-template-columns:1fr 1fr;gap:12px;
+    }
+    @media (max-width:920px){ .grid{grid-template-columns:1fr;} }
+
+    .panel{
+      border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff;
+    }
+    .panel .ph{
+      padding:10px 12px;background:#f8fafc;border-bottom:1px solid var(--line);
+      display:flex;align-items:center;justify-content:space-between;gap:10px;
+      font-weight:700;font-size:13px;
+    }
+    .panel .pb{padding:12px;}
+    .form-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px;}
+    .form-row input, .form-row select{
+      border:1px solid var(--line);border-radius:10px;padding:10px 10px;outline:none;
+    }
+    .form-row input[type="text"]{flex:1;min-width:220px;}
+    .form-row input[type="date"]{min-width:160px;}
+    .form-row input[type="number"]{min-width:160px;}
+    .form-row button{
+      border:1px solid var(--line);background:#fff;border-radius:10px;padding:10px 12px;cursor:pointer;
+    }
+    .form-row button.primary{background:var(--brand);border-color:var(--brand);color:#fff;}
+    .mini{
+      font-size:12px;color:var(--muted);line-height:1.5;
+    }
+    .detail-table{width:100%;border-collapse:collapse;}
+    .detail-table th, .detail-table td{border-bottom:1px solid var(--line);padding:8px 8px;font-size:13px;}
+    .detail-table th{background:#f8fafc;text-align:left;}
+    .right{text-align:right;}
+    .actions button{padding:6px 10px;border-radius:10px;}
+    .sumline{
+      display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:flex-end;
+      padding-top:10px;
+    }
+    .sumline .k{color:var(--muted)}
+    .sumline .v{font-weight:800;font-variant-numeric:tabular-nums;}
+    .footerbar{
+      display:flex;gap:10px;justify-content:space-between;align-items:center;
+      padding:12px;border-top:1px solid var(--line);background:#fff;
+    }
+    .footerbar .totals{display:flex;gap:18px;flex-wrap:wrap;}
+    .footerbar .totals span{font-size:13px;}
+    .footerbar .totals b{font-variant-numeric:tabular-nums;}
+  </style>
+</head>
+<body>
+  <header class="wrap">
+    <h1 style="margin:0 0 6px 0;font-size:18px;">项目收支表（已付金额支持分笔付款 + 加减公式）</h1>
+    <div style="color:var(--muted);font-size:13px;line-height:1.5;">
+      点击 <b>客户</b> 或 <b>项目内容</b> 打开二级菜单：可录入“已付明细”（多笔付款）并用公式汇总（如 <code>20000+5000-300</code>）。
+    </div>
+  </header>
+
+  <div class="wrap">
+    <div class="toolbar">
+      <input id="q" placeholder="搜索客户 / 项目内容…" />
+      <button id="btnAdd" class="primary">新增一行</button>
+      <button id="btnExport">导出 JSON</button>
+      <button id="btnImport">导入 JSON</button>
+      <span class="hint">本页面数据默认保存在浏览器本地（localStorage）</span>
+    </div>
+
+    <div class="card">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:110px;">日期</th>
+            <th style="width:120px;">客户</th>
+            <th>项目内容（例如：搭建）</th>
+            <th style="width:120px;">实际金额</th>
+            <th style="width:140px;">已开发票税额</th>
+            <th style="width:120px;">已付金额</th>
+            <th style="width:120px;">欠款金额</th>
+            <th style="width:220px;">材料详情</th>
+            <th style="width:110px;">材料费用</th>
+            <th style="width:220px;">人工详情</th>
+            <th style="width:110px;">人工费用</th>
+            <th style="width:110px;">成本</th>
+            <th style="width:110px;">利润</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+
+      <div class="footerbar">
+        <div class="totals" id="totals"></div>
+        <div class="mini">提示：欠款>0 的行会自动标红。</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 二级菜单：明细弹窗 -->
+  <div class="overlay" id="overlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true">
+      <header>
+        <div>
+          <h2 id="modalTitle">明细</h2>
+          <div class="mini" id="modalSub"></div>
+        </div>
+        <button class="close" id="btnClose">关闭</button>
+      </header>
+      <div class="content">
+        <div class="grid">
+          <!-- 已付明细：重点 -->
+          <div class="panel">
+            <div class="ph">
+              <span>已付金额明细（支持分笔 + 公式加减）</span>
+              <span class="badge" id="paidBadge">合计：0.00</span>
+            </div>
+            <div class="pb">
+              <div class="form-row">
+                <input type="date" id="paidDate" />
+                <input type="text" id="paidNote" placeholder="备注（例如：第一笔/尾款/转账单号）" />
+              </div>
+              <div class="form-row">
+                <input type="text" id="paidExpr" placeholder="金额/公式，例如：20000 + 5000 - 300" />
+                <button class="primary" id="btnAddPaid">添加明细</button>
+              </div>
+              <div class="mini">
+                说明：你可以直接输入数字（如 <code>5500</code>），也可以输入加减表达式（只允许数字、+、-、小数点与空格）。
+              </div>
+
+              <div style="margin-top:12px;">
+                <table class="detail-table" id="paidTable">
+                  <thead>
+                    <tr>
+                      <th style="width:110px;">日期</th>
+                      <th>备注</th>
+                      <th class="right" style="width:160px;">公式/金额</th>
+                      <th class="right" style="width:120px;">计算值</th>
+                      <th style="width:90px;">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody id="paidTbody"></tbody>
+                </table>
+              </div>
+
+              <div class="sumline">
+                <span class="k">实际金额：</span><span class="v" id="sumActual">0.00</span>
+                <span class="k">已付合计：</span><span class="v" id="sumPaid">0.00</span>
+                <span class="k">欠款：</span><span class="v" id="sumDue">0.00</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 材料/人工：占位（可继续按你现有规则扩展） -->
+          <div class="panel">
+            <div class="ph">
+              <span>材料/人工明细（示例占位）</span>
+              <span class="badge">可后续按你现有逻辑扩展</span>
+            </div>
+            <div class="pb">
+              <div class="mini">
+                你截图里“材料详情/人工详情”也是二级菜单并用公式汇总。
+                这份原型先把“已付金额”做成同样的机制；材料/人工明细可以用同一套组件复制出来。
+              </div>
+              <hr style="border:none;border-top:1px solid var(--line);margin:12px 0;">
+              <div class="mini">
+                下一步如果你确认字段结构（材料明细项：名称、单价、数量、加减？；人工明细项：工种、人数、天数…），我可以把这两个也完整实现。
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="footerbar">
+        <div class="mini">改动会实时保存到本地。</div>
+        <div style="display:flex;gap:10px;">
+          <button id="btnClearPaid">清空已付明细</button>
+          <button class="primary" id="btnDone">完成</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+/** ====== 工具：安全计算加减表达式 ======
+ * 仅允许: 数字、小数点、+、-、空格
+ * 例如: "20000 + 5000 - 300" -> 24700
+ */
+function evalPlusMinus(expr){
+  const s = String(expr ?? "").trim();
+  if(!s) return 0;
+  if(!/^[0-9+\-.\s]+$/.test(s)) throw new Error("表达式包含非法字符");
+  // 规范化：把连续空格去掉
+  const normalized = s.replace(/\s+/g, "");
+  // 防止像 "1..2" 之类，简单校验 token
+  const tokens = normalized.split(/([+\-])/).filter(Boolean);
+  // tokens: [num, op, num, op, num...]
+  let acc = 0;
+  let op = "+";
+  for(const t of tokens){
+    if(t === "+" || t === "-"){ op = t; continue; }
+    if(!/^\d*\.?\d+$/.test(t)) throw new Error("数字格式不正确");
+    const n = Number(t);
+    acc = op === "+" ? acc + n : acc - n;
+  }
+  // 处理浮点：保留2位
+  return Math.round((acc + Number.EPSILON) * 100) / 100;
+}
+
+function fmt(n){
+  const v = Number(n ?? 0);
+  return v.toLocaleString("zh-CN",{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+
+const LS_KEY = "project_table_v1_paid_detail";
+
+/** ====== 数据结构 ======
+row = {
+  id, date, client, content,
+  actual, invoiceTax,
+  paidDetails: [{id,date,note,expr,value}],
+  paid, due,
+  materialDetail, materialCost, laborDetail, laborCost, cost, profit
+}
+*/
+function uid(){ return Math.random().toString(16).slice(2) + Date.now().toString(16); }
+
+const defaultRows = [
+  {
+    id: uid(),
+    date: "2026-01-08",
+    client: "苏启",
+    content: "益田假日商城",
+    actual: 5500,
+    invoiceTax: 0,
+    paidDetails: [
+      { id: uid(), date:"2026-01-08", note:"一次性付款", expr:"5500", value: 5500 }
+    ],
+    materialDetail: "喷绘737，旗200+，车费48（刘）",
+    materialCost: 985,
+    laborDetail: "搭建2大桥2人200/班+500减+300刚",
+    laborCost: 1000
+  }
+];
+
+function load(){
+  try{
+    const raw = localStorage.getItem(LS_KEY);
+    if(!raw) return structuredClone(defaultRows);
+    const rows = JSON.parse(raw);
+    // 兼容：如果没有 paidDetails 则补上
+    for(const r of rows){
+      r.paidDetails = Array.isArray(r.paidDetails) ? r.paidDetails : [];
+    }
+    return rows;
+  }catch(e){
+    console.warn(e);
+    return structuredClone(defaultRows);
+  }
+}
+function save(){
+  localStorage.setItem(LS_KEY, JSON.stringify(rows));
+}
+
+let rows = load();
+
+/** ====== 派生计算 ====== */
+function calcRow(r){
+  // 已付合计来自 paidDetails 的 value
+  const paid = (r.paidDetails || []).reduce((s,x)=>s + Number(x.value||0), 0);
+  const actual = Number(r.actual||0);
+  const due = Math.round((actual - paid + Number.EPSILON) * 100) / 100;
+
+  const materialCost = Number(r.materialCost||0);
+  const laborCost = Number(r.laborCost||0);
+  const cost = Math.round((materialCost + laborCost + Number.EPSILON) * 100) / 100;
+  const profit = Math.round((actual - cost + Number.EPSILON) * 100) / 100;
+
+  return { paid, due, cost, profit };
+}
+
+function render(){
+  const q = document.getElementById("q").value.trim().toLowerCase();
+  const tb = document.getElementById("tbody");
+  tb.innerHTML = "";
+
+  let totalActual=0,totalPaid=0,totalDue=0,totalCost=0,totalProfit=0;
+
+  for(const r of rows){
+    const derived = calcRow(r);
+    r.paid = derived.paid;
+    r.due = derived.due;
+    r.cost = derived.cost;
+    r.profit = derived.profit;
+
+    const hit = !q || (r.client||"").toLowerCase().includes(q) || (r.content||"").toLowerCase().includes(q);
+    if(!hit) continue;
+
+    totalActual += Number(r.actual||0);
+    totalPaid += Number(r.paid||0);
+    totalDue += Number(r.due||0);
+    totalCost += Number(r.cost||0);
+    totalProfit += Number(r.profit||0);
+
+    const tr = document.createElement("tr");
+    if(r.due > 0) tr.classList.add("row-warn");
+
+    tr.innerHTML = `
+      <td class="center"><input data-k="date" data-id="${r.id}" type="date" value="${r.date || ""}"
+        style="border:1px solid var(--line);border-radius:10px;padding:6px 8px;width:100%;"></td>
+
+      <td class="center"><span class="link" data-open="${r.id}" data-why="client">${r.client || "（未填写）"}</span></td>
+      <td><span class="link" data-open="${r.id}" data-why="content">${r.content || "（未填写）"}</span></td>
+
+      <td class="num"><input data-k="actual" data-id="${r.id}" type="number" step="0.01" value="${Number(r.actual||0)}"
+        style="border:1px solid var(--line);border-radius:10px;padding:6px 8px;width:100%;text-align:right;"></td>
+
+      <td class="num"><input data-k="invoiceTax" data-id="${r.id}" type="number" step="0.01" value="${Number(r.invoiceTax||0)}"
+        style="border:1px solid var(--line);border-radius:10px;padding:6px 8px;width:100%;text-align:right;"></td>
+
+      <td class="num">
+        <span class="link" data-open="${r.id}" data-why="paid">${fmt(r.paid||0)}</span>
+        <div class="mini">(${(r.paidDetails||[]).length} 笔)</div>
+      </td>
+
+      <td class="num ${r.due>0?'neg':'pos'}">${fmt(r.due||0)}</td>
+
+      <td><input data-k="materialDetail" data-id="${r.id}" type="text" value="${(r.materialDetail||"").replaceAll('"','&quot;')}"
+        style="border:1px solid var(--line);border-radius:10px;padding:6px 8px;width:100%;"></td>
+
+      <td class="num"><input data-k="materialCost" data-id="${r.id}" type="number" step="0.01" value="${Number(r.materialCost||0)}"
+        style="border:1px solid var(--line);border-radius:10px;padding:6px 8px;width:100%;text-align:right;"></td>
+
+      <td><input data-k="laborDetail" data-id="${r.id}" type="text" value="${(r.laborDetail||"").replaceAll('"','&quot;')}"
+        style="border:1px solid var(--line);border-radius:10px;padding:6px 8px;width:100%;"></td>
+
+      <td class="num"><input data-k="laborCost" data-id="${r.id}" type="number" step="0.01" value="${Number(r.laborCost||0)}"
+        style="border:1px solid var(--line);border-radius:10px;padding:6px 8px;width:100%;text-align:right;"></td>
+
+      <td class="num">${fmt(r.cost||0)}</td>
+      <td class="num">${fmt(r.profit||0)}</td>
+    `;
+    tb.appendChild(tr);
+  }
+
+  document.getElementById("totals").innerHTML = `
+    <span>合计实际金额：<b>${fmt(totalActual)}</b></span>
+    <span>合计已付金额：<b>${fmt(totalPaid)}</b></span>
+    <span>合计欠款金额：<b>${fmt(totalDue)}</b></span>
+    <span>合计成本：<b>${fmt(totalCost)}</b></span>
+    <span>合计利润：<b>${fmt(totalProfit)}</b></span>
+  `;
+
+  save();
+}
+
+/** ====== 编辑绑定 ====== */
+document.addEventListener("input", (e)=>{
+  const el = e.target;
+  const id = el.getAttribute("data-id");
+  const k = el.getAttribute("data-k");
+  if(!id || !k) return;
+  const r = rows.find(x=>x.id===id);
+  if(!r) return;
+
+  if(k === "actual" || k === "invoiceTax" || k === "materialCost" || k === "laborCost"){
+    r[k] = Number(el.value || 0);
+  }else{
+    r[k] = el.value;
+  }
+  render();
+});
+
+document.addEventListener("click", (e)=>{
+  const openId = e.target?.getAttribute?.("data-open");
+  if(openId){
+    openPaidModal(openId);
+  }
+});
+
+/** ====== 二级菜单：已付明细 ====== */
+const overlay = document.getElementById("overlay");
+const btnClose = document.getElementById("btnClose");
+const btnDone = document.getElementById("btnDone");
+const btnAddPaid = document.getElementById("btnAddPaid");
+const btnClearPaid = document.getElementById("btnClearPaid");
+let currentRowId = null;
+
+function openPaidModal(rowId){
+  currentRowId = rowId;
+  const r = rows.find(x=>x.id===rowId);
+  if(!r) return;
+
+  document.getElementById("modalTitle").textContent = "二级菜单：已付金额明细";
+  document.getElementById("modalSub").textContent = `客户：${r.client||"（未填写）"} ｜ 项目：${r.content||"（未填写）"}`;
+
+  // 默认日期：今天
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth()+1).padStart(2,"0");
+  const dd = String(today.getDate()).padStart(2,"0");
+  document.getElementById("paidDate").value = `${yyyy}-${mm}-${dd}`;
+  document.getElementById("paidNote").value = "";
+  document.getElementById("paidExpr").value = "";
+
+  renderPaidTable();
+  overlay.classList.add("open");
+  overlay.setAttribute("aria-hidden","false");
+}
+
+function closeModal(){
+  overlay.classList.remove("open");
+  overlay.setAttribute("aria-hidden","true");
+  currentRowId = null;
+}
+btnClose.addEventListener("click", closeModal);
+btnDone.addEventListener("click", closeModal);
+overlay.addEventListener("click", (e)=>{ if(e.target === overlay) closeModal(); });
+
+function renderPaidTable(){
+  const r = rows.find(x=>x.id===currentRowId);
+  if(!r) return;
+  const body = document.getElementById("paidTbody");
+  body.innerHTML = "";
+
+  let sum = 0;
+  for(const d of (r.paidDetails||[])){
+    sum += Number(d.value||0);
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${d.date || ""}</td>
+      <td>${(d.note||"").replaceAll("<","&lt;")}</td>
+      <td class="right"><code>${(d.expr||"").replaceAll("<","&lt;")}</code></td>
+      <td class="right">${fmt(d.value||0)}</td>
+      <td class="actions">
+        <button data-delpaid="${d.id}">删除</button>
+      </td>
+    `;
+    body.appendChild(tr);
+  }
+
+  const derived = calcRow(r);
+  document.getElementById("paidBadge").textContent = `合计：${fmt(derived.paid)}`;
+  document.getElementById("sumActual").textContent = fmt(Number(r.actual||0));
+  document.getElementById("sumPaid").textContent = fmt(derived.paid);
+  document.getElementById("sumDue").textContent = fmt(derived.due);
+
+  save();
+  // 更新主表
+  render();
+}
+
+btnAddPaid.addEventListener("click", ()=>{
+  const r = rows.find(x=>x.id===currentRowId);
+  if(!r) return;
+
+  const date = document.getElementById("paidDate").value;
+  const note = document.getElementById("paidNote").value.trim();
+  const expr = document.getElementById("paidExpr").value.trim();
+
+  if(!expr){
+    alert("请输入金额或公式。");
+    return;
+  }
+
+  let value = 0;
+  try{
+    value = evalPlusMinus(expr);
+  }catch(err){
+    alert("公式错误：" + (err?.message || err));
+    return;
+  }
+
+  r.paidDetails.unshift({
+    id: uid(),
+    date: date || "",
+    note,
+    expr,
+    value
+  });
+
+  document.getElementById("paidNote").value = "";
+  document.getElementById("paidExpr").value = "";
+  renderPaidTable();
+});
+
+document.addEventListener("click", (e)=>{
+  const delId = e.target?.getAttribute?.("data-delpaid");
+  if(!delId) return;
+  const r = rows.find(x=>x.id===currentRowId);
+  if(!r) return;
+  r.paidDetails = (r.paidDetails||[]).filter(x=>x.id !== delId);
+  renderPaidTable();
+});
+
+btnClearPaid.addEventListener("click", ()=>{
+  const r = rows.find(x=>x.id===currentRowId);
+  if(!r) return;
+  if(!confirm("确定清空该项目的已付明细吗？")) return;
+  r.paidDetails = [];
+  renderPaidTable();
+});
+
+/** ====== 新增/导入导出 ====== */
+document.getElementById("btnAdd").addEventListener("click", ()=>{
+  rows.unshift({
+    id: uid(),
+    date: "",
+    client: "（点击填写客户）",
+    content: "（点击填写项目）",
+    actual: 0,
+    invoiceTax: 0,
+    paidDetails: [],
+    materialDetail: "",
+    materialCost: 0,
+    laborDetail: "",
+    laborCost: 0
+  });
+  render();
+});
+
+document.getElementById("btnExport").addEventListener("click", ()=>{
+  const data = JSON.stringify(rows, null, 2);
+  const blob = new Blob([data], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "project-table.json";
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+document.getElementById("btnImport").addEventListener("click", ()=>{
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "application/json";
+  input.onchange = async ()=>{
+    const file = input.files?.[0];
+    if(!file) return;
+    const text = await file.text();
+    try{
+      const parsed = JSON.parse(text);
+      if(!Array.isArray(parsed)) throw new Error("JSON 顶层必须是数组");
+      for(const r of parsed){
+        r.id = r.id || uid();
+        r.paidDetails = Array.isArray(r.paidDetails) ? r.paidDetails : [];
+        // 兼容：如果 paidDetails 没有 value，则尝试按 expr 计算
+        for(const d of r.paidDetails){
+          if(typeof d.value !== "number"){
+            try{ d.value = evalPlusMinus(d.expr||"0"); }catch{ d.value = Number(d.value||0); }
+          }
+          d.id = d.id || uid();
+        }
+      }
+      rows = parsed;
+      save();
+      render();
+      alert("导入成功");
+    }catch(err){
+      alert("导入失败：" + (err?.message || err));
+    }
+  };
+  input.click();
+});
+
+document.getElementById("q").addEventListener("input", render);
+
+// 首次渲染
+render();
+</script>
+</body>
+</html>
