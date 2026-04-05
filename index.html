@@ -20,7 +20,7 @@
       --soft:#f8fafc;
     }
     *{box-sizing:border-box;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"PingFang SC","Microsoft YaHei",sans-serif;}
-    body{margin:0;background:var(--bg);color:var(--text);} 
+    body{margin:0;background:var(--bg);color:var(--text);}
     .wrap{width:100%;max-width:none;margin:0;padding:12px;}
 
     .toolbar{
@@ -202,7 +202,7 @@
       text-align:center;
       vertical-align:middle;
     }
-    .detail-table th{background:var(--soft);} 
+    .detail-table th{background:var(--soft);}
     code{
       background:#f3f4f6;
       border:1px solid #e5e7eb;
@@ -329,7 +329,7 @@
       position:relative;
       cursor:pointer;
     }
-    .imgbox:hover{border-color:#c7d2fe;box-shadow:0 10px 30px rgba(0,0,0,.08);} 
+    .imgbox:hover{border-color:#c7d2fe;box-shadow:0 10px 30px rgba(0,0,0,.08);}
     .imgbox img{
       width:100%;
       height:120px;
@@ -367,29 +367,14 @@
       white-space:normal !important;
       min-width:240px;
     }
-    .cellRich .n{font-weight:800;color:var(--text);} 
+    .cellRich .n{font-weight:800;color:var(--text);}
     .cellRich .v{color:var(--muted);font-variant-numeric:tabular-nums;margin-top:2px;}
-
-    /* Cloud sync modal */
-    .cloudOverlay{position:fixed;inset:0;background:rgba(15,23,42,.45);display:none;align-items:flex-start;justify-content:center;padding:24px;z-index:1000;}
-    .cloudOverlay.open{display:flex;}
-    .cloudModal{width:min(720px,100%);background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 20px 80px rgba(0,0,0,.25);overflow:hidden;}
-    .cloudModal header{padding:14px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px;background:#fff;user-select:none;}
-    .cloudModal header h2{margin:0;font-size:16px;}
-    .cloudModal .content{padding:14px;}
-    .cloudModal .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px;}
-    .cloudModal label{width:110px;color:var(--muted);font-size:13px;}
-    .cloudModal input{flex:1;min-width:220px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;outline:none;background:#fff;}
-    .cloudModal .actions{display:flex;justify-content:flex-end;gap:10px;margin-top:12px;}
   </style>
 </head>
 <body>
   <div class="wrap">
     <div class="toolbar">
       <button id="btnAddRow" class="primary">新增</button>
-      <button id="btnCloudSetup">云同步设置</button>
-      <button id="btnCloudLoad">云端加载</button>
-      <button id="btnCloudSave">云端保存</button>
     </div>
 
     <div class="tableWrap">
@@ -412,34 +397,6 @@
         </thead>
         <tbody id="tbody"></tbody>
       </table>
-    </div>
-  </div>
-
-  <div class="cloudOverlay" id="cloudOverlay" aria-hidden="true">
-    <div class="cloudModal" role="dialog" aria-modal="true">
-      <header>
-        <h2>云同步设置</h2>
-        <button class="closeX" id="btnCloseCloud" aria-label="关闭">&times;</button>
-      </header>
-      <div class="content">
-        <div class="row">
-          <label>Worker 地址</label>
-          <input id="cloudEndpoint" type="text" placeholder="https://xxxx.8206230527.workers.dev" />
-        </div>
-        <div class="row">
-          <label>同步 Key</label>
-          <input id="cloudKey" type="text" placeholder="main" />
-        </div>
-        <div class="row">
-          <label>同步密码</label>
-          <input id="cloudSecret" type="password" placeholder="SYNC_SECRET" />
-        </div>
-        <div class="mini">提示：密码只保存在本机浏览器 localStorage，不会写入 GitHub 仓库。</div>
-        <div class="actions">
-          <button id="btnCloudTest">测试连接</button>
-          <button class="primary" id="btnCloudSaveCfg">保存</button>
-        </div>
-      </div>
     </div>
   </div>
 
@@ -550,55 +507,6 @@
 
   const LS_KEY = "sheet_center_final_owner_note_v5_allow_empty_owners";
 
-  // ===== Cloud Sync =====
-  const CLOUD_CFG_KEY = "project_table_cloud_cfg_v1";
-  let CLOUD = { endpoint: "", key: "main", secret: "" };
-  function loadCloudCfg(){
-    try{ const raw = localStorage.getItem(CLOUD_CFG_KEY); if(raw) CLOUD = {...CLOUD, ...JSON.parse(raw)}; }catch{}
-  }
-  function saveCloudCfg(){ localStorage.setItem(CLOUD_CFG_KEY, JSON.stringify(CLOUD)); }
-
-  async function cloudLoad(){
-    if(!CLOUD.endpoint || !CLOUD.secret) throw new Error("cloud config missing");
-    const res = await fetch(`${CLOUD.endpoint.replace(/\/+/,'')}/api/load?key=${encodeURIComponent(CLOUD.key||'main')}`, {
-      method: "GET",
-      headers: { "X-Auth": CLOUD.secret }
-    });
-    if(!res.ok) throw new Error(`cloud load failed: ${res.status}`);
-    const json = await res.json();
-    if(!json.ok) throw new Error(json.error || "cloud load error");
-    return json.data;
-  }
-  async function cloudSave(payload){
-    if(!CLOUD.endpoint || !CLOUD.secret) throw new Error("cloud config missing");
-    const res = await fetch(`${CLOUD.endpoint.replace(/\/+/,'')}/api/save?key=${encodeURIComponent(CLOUD.key||'main')}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Auth": CLOUD.secret },
-      body: JSON.stringify(payload)
-    });
-    if(!res.ok) throw new Error(`cloud save failed: ${res.status}`);
-    const json = await res.json();
-    if(!json.ok) throw new Error(json.error || "cloud save error");
-    return true;
-  }
-
-  function openCloud(){
-    document.getElementById("cloudEndpoint").value = CLOUD.endpoint || "";
-    document.getElementById("cloudKey").value = CLOUD.key || "main";
-    document.getElementById("cloudSecret").value = CLOUD.secret || "";
-    document.getElementById("cloudOverlay").classList.add("open");
-  }
-  function closeCloud(){ document.getElementById("cloudOverlay").classList.remove("open"); }
-
-  let cloudSaveTimer = 0;
-  function scheduleCloudAutoSave(){
-    if(!CLOUD.endpoint || !CLOUD.secret) return;
-    clearTimeout(cloudSaveTimer);
-    cloudSaveTimer = setTimeout(async ()=>{ try{ await cloudSave(rows); }catch{} }, 900);
-  }
-
-  loadCloudCfg();
-
   function uid(){ return Math.random().toString(16).slice(2) + Date.now().toString(16); }
   function fmt(n){
     const v = Number(n ?? 0);
@@ -621,10 +529,10 @@
   function normalizeDateInput(s){
     const v = String(s || "").trim();
     if(!v) return "";
-    if(/^{8}$/.test(v)){
+    if(/^\d{8}$/.test(v)){
       return `${v.slice(0,4)}-${v.slice(4,6)}-${v.slice(6,8)}`;
     }
-    const m = v.match(/^({4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})$/);
+    const m = v.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})$/);
     if(m){
       const yyyy = m[1];
       const mm = String(m[2]).padStart(2,"0");
@@ -660,7 +568,7 @@
   function evalPlusMinus(expr){
     const s = String(expr ?? "").trim();
     if(!s) return 0;
-    if(!/^[0-9+\-\.\s]+$/.test(s)) throw new Error("bad expr");
+    if(!/^[0-9+\-.\s]+$/.test(s)) throw new Error("bad expr");
     const normalized = s.replace(/\s+/g,"");
     const tokens = normalized.split(/([+\-])/).filter(Boolean);
     let acc = 0, op = "+";
@@ -724,7 +632,7 @@
       const rows = raw ? JSON.parse(raw) : structuredClone(defaultRows);
       for(const r of rows){
         r.id = r.id || uid();
-        r.date = r.date || "";
+        r.date = r.date || todayStr();
         r.client = r.client || "";
         r.content = r.content || "";
         r.invoiceTax = Number(r.invoiceTax||0);
@@ -758,8 +666,7 @@
             let total = 0;
             for(const owner of Object.keys(d.parts)){
               const p = d.parts[owner] || (d.parts[owner] = {});
-              p.note = String(p.note||""
-              ).trim();
+              p.note = String(p.note||"").trim();
               p.expr = String(p.expr||"").trim();
               if(typeof p.value !== "number"){
                 try{ p.value = evalPlusMinus(p.expr||"0"); }catch{ p.value = 0; }
@@ -848,55 +755,7 @@
 
     document.querySelectorAll('input[placeholder]').forEach(hidePlaceholderOnFocus);
     save();
-    scheduleCloudAutoSave();
   }
-
-  // Cloud UI hooks
-  const btnCloudSetup = document.getElementById("btnCloudSetup");
-  const btnCloudLoad = document.getElementById("btnCloudLoad");
-  const btnCloudSave = document.getElementById("btnCloudSave");
-  btnCloudSetup.addEventListener("click", openCloud);
-  document.getElementById("btnCloseCloud").addEventListener("click", closeCloud);
-  document.getElementById("cloudOverlay").addEventListener("click", (e)=>{ if(e.target.id==="cloudOverlay") closeCloud(); });
-
-  document.getElementById("btnCloudSaveCfg").addEventListener("click", ()=>{
-    CLOUD.endpoint = (document.getElementById("cloudEndpoint").value||""
-    ).trim();
-    CLOUD.key = (document.getElementById("cloudKey").value||"main").trim() || "main";
-    CLOUD.secret = document.getElementById("cloudSecret").value || "";
-    saveCloudCfg();
-    closeCloud();
-    alert("云同步设置已保存（只保存在本机浏览器）。");
-  });
-
-  document.getElementById("btnCloudTest").addEventListener("click", async ()=>{
-    try{
-      CLOUD.endpoint = (document.getElementById("cloudEndpoint").value||""
-      ).trim();
-      CLOUD.key = (document.getElementById("cloudKey").value||"main").trim() || "main";
-      CLOUD.secret = document.getElementById("cloudSecret").value || "";
-      const data = await cloudLoad();
-      alert("连接成功。云端数据：" + (data ? "有" : "空"));
-    }catch(err){
-      alert("连接失败：" + (err?.message || err));
-    }
-  });
-
-  btnCloudLoad.addEventListener("click", async ()=>{
-    try{
-      const data = await cloudLoad();
-      if(!data){ alert("云端暂无数据。"); return; }
-      rows = data;
-      save();
-      render();
-      alert("已从云端加载。");
-    }catch(err){ alert("云端加载失败：" + (err?.message || err)); }
-  });
-
-  btnCloudSave.addEventListener("click", async ()=>{
-    try{ await cloudSave(rows); alert("已保存到云端。"); }
-    catch(err){ alert("云端保存失败：" + (err?.message || err)); }
-  });
 
   document.getElementById("btnAddRow").addEventListener("click", ()=>{
     rows.unshift({
@@ -924,7 +783,6 @@
     if(k==="invoiceTax") r[k] = Number(e.target.value||0);
     else r[k] = e.target.value;
     save();
-    scheduleCloudAutoSave();
   });
 
   document.addEventListener("change",(e)=>{
@@ -1035,11 +893,11 @@
   const clientTbody = document.getElementById("clientTbody");
 
   function openClient(name){
-    const clientName = (name||").trim();
+    const clientName = (name||"").trim();
     document.getElementById("clientTitle").textContent = clientName || "客户";
     clientTbody.innerHTML = "";
 
-    const list = rows.filter(x => (x.client||".trim() === clientName);
+    const list = rows.filter(x => (x.client||"").trim() === clientName);
     for(const r of list){
       const d = derived(r);
       const tr = document.createElement("tr");
@@ -1071,8 +929,490 @@
     openClient(r.client || "");
   });
 
-  // ... remainder unchanged
+  /* 明细弹窗 */
+  const overlayDetail = document.getElementById("overlayDetail");
+  const detailTbody = document.getElementById("detailTbody");
+  const detailThead = document.getElementById("detailThead");
+  const ownerRows = document.getElementById("ownerRows");
+  const normalArea = document.getElementById("normalArea");
+  const splitArea = document.getElementById("splitArea");
+  const uploadArea = document.getElementById("uploadArea");
+  const imgInput = document.getElementById("imgInput");
+  const imgList = document.getElementById("imgList");
+  const btnAddSplitRow = document.getElementById("btnAddSplitRow");
+  const ownerBadge = document.getElementById("ownerBadge");
 
+  let detailCtx = null; // {rowId, kind}
+
+  function kindCfg(kind){
+    switch(kind){
+      case "actual": return {title:"实际金额", panel:"详细报价", listKey:"actualDetails", split:false, upload:true};
+      case "paid": return {title:"已付金额", panel:"分笔付款", listKey:"paidDetails", split:false, upload:false};
+      case "material": return {title:"材料费用", panel:"材料明细（负责人分摊）", listKey:"materialDetails", split:true, upload:false};
+      case "labor": return {title:"人工费用", panel:"人工明细（负责人分摊）", listKey:"laborDetails", split:true, upload:false};
+      default: return {title:"明细", panel:"明细", listKey:"paidDetails", split:false, upload:false};
+    }
+  }
+
+  // ✅ 允许空负责人：只保证是数组，不再补默认
+  function ensureOwners(r){
+    if(!Array.isArray(r.owners)) r.owners = [];
+  }
+
+  function openDetail(rowId, kind){
+    const r = rows.find(x=>x.id===rowId);
+    if(!r) return;
+    detailCtx = {rowId, kind};
+    const cfg = kindCfg(kind);
+
+    document.getElementById("detailTitle").textContent = cfg.title;
+    document.getElementById("detailPanelTitle").textContent = cfg.panel;
+    document.getElementById("detailSub").textContent = `${r.client||""} / ${r.content||""}`;
+
+    document.getElementById("dDate").value = todayStr();
+    document.getElementById("dNote").value = "";
+    document.getElementById("dExpr").value = "";
+
+    if(cfg.split){
+      ensureOwners(r);
+      normalArea.style.display = "none";
+      splitArea.style.display = "";
+      uploadArea.style.display = "none";
+      renderOwnerInputs(r);
+    }else{
+      normalArea.style.display = "";
+      splitArea.style.display = "none";
+      uploadArea.style.display = cfg.upload ? "" : "none";
+      if(cfg.upload) renderActualImages();
+    }
+
+    renderDetail();
+    overlayDetail.classList.add("open");
+  }
+
+  function closeDetail(){
+    overlayDetail.classList.remove("open");
+    detailCtx = null;
+    imgInput.value = "";
+  }
+  document.getElementById("btnCloseDetail").addEventListener("click", closeDetail);
+  document.getElementById("btnDoneDetail").addEventListener("click", closeDetail);
+  overlayDetail.addEventListener("click",(e)=>{ if(e.target===overlayDetail) closeDetail(); });
+
+  function renderDetailThead(cfg, r){
+    if(cfg.split){
+      ensureOwners(r);
+      const owners = r.owners || [];
+      const ownerThs = owners.map(n => `<th>${esc(n)}（明细/金额）</th>`).join("");
+      detailThead.innerHTML = `
+        <tr>
+          <th style="width:110px;">日期</th>
+          ${ownerThs}
+          <th style="width:120px;">合计</th>
+          <th style="width:90px;">操作</th>
+        </tr>
+      `;
+    }else{
+      detailThead.innerHTML = `
+        <tr>
+          <th style="width:110px;">日期</th>
+          <th>明细</th>
+          <th style="width:220px;">公式/金额</th>
+          <th style="width:120px;">计算值</th>
+          <th style="width:90px;">操作</th>
+        </tr>
+      `;
+    }
+  }
+
+  function sumParts(parts, owners){
+    let t = 0;
+    for(const o of owners){
+      t += Number(parts?.[o]?.value || 0);
+    }
+    return Math.round((t + Number.EPSILON) * 100) / 100;
+  }
+
+  function calcOwnerTotals(list, owners){
+    const totals = {};
+    for(const o of owners) totals[o] = 0;
+    for(const d of (list||[])){
+      for(const o of owners){
+        totals[o] += Number(d.parts?.[o]?.value || 0);
+      }
+    }
+    for(const o of owners){
+      totals[o] = Math.round((totals[o] + Number.EPSILON) * 100) / 100;
+    }
+    return totals;
+  }
+
+  function setOwnerBadge(text, isWarn=false){
+    ownerBadge.textContent = text;
+    ownerBadge.classList.toggle("warn", !!isWarn);
+  }
+
+  function renderDetail(){
+    if(!detailCtx) return;
+    const r = rows.find(x=>x.id===detailCtx.rowId);
+    if(!r) return;
+    const cfg = kindCfg(detailCtx.kind);
+
+    const list = r[cfg.listKey] || [];
+    renderDetailThead(cfg, r);
+
+    detailTbody.innerHTML = "";
+    let total = 0;
+
+    if(cfg.split){
+      ensureOwners(r);
+      const owners = r.owners || [];
+
+      // ✅ 没有负责人：禁用添加 + 提示
+      if(owners.length === 0){
+        btnAddSplitRow.disabled = true;
+        setOwnerBadge("请先添加负责人", true);
+      }else{
+        btnAddSplitRow.disabled = false;
+      }
+
+      for(const d of list){
+        d.parts = d.parts && typeof d.parts === "object" ? d.parts : {};
+        for(const o of owners){
+          const p = d.parts[o] || (d.parts[o] = {note:"", expr:"", value:0});
+          p.note = String(p.note||"").trim();
+          p.expr = String(p.expr||"").trim();
+          if(typeof p.value !== "number"){
+            try{ p.value = evalPlusMinus(p.expr||"0"); }catch{ p.value = 0; }
+          }
+        }
+        d.value = sumParts(d.parts, owners);
+
+        total += Number(d.value||0);
+
+        const tds = owners.map(o => {
+          const p = d.parts?.[o] || {};
+          const note = esc(p.note || "");
+          const val = fmt(p.value || 0);
+          return `<td class="cellRich">
+                    <div class="n">${note || "—"}</div>
+                    <div class="v">${val}</div>
+                  </td>`;
+        }).join("");
+
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${esc(d.date||"")}</td>
+          ${tds}
+          <td style="font-weight:900;">${fmt(d.value||0)}</td>
+          <td><button class="xbtn" title="删除" data-del-detail="${d.id}">&times;</button></td>
+        `;
+        detailTbody.appendChild(tr);
+      }
+
+      if(owners.length > 0){
+        const ownerTotals = calcOwnerTotals(list, owners);
+        const ownerLine = owners.map(o => `${o}:${fmt(ownerTotals[o])}`).join(" / ");
+        setOwnerBadge(`负责人合计：${ownerLine}`, false);
+      }
+
+    }else{
+      for(const d of list){
+        total += Number(d.value||0);
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${esc(d.date||"")}</td>
+          <td>${esc(d.note||"")}</td>
+          <td><code>${esc(d.expr||"")}</code></td>
+          <td>${fmt(d.value||0)}</td>
+          <td><button class="xbtn" title="删除" data-del-detail="${d.id}">&times;</button></td>
+        `;
+        detailTbody.appendChild(tr);
+      }
+      setOwnerBadge("—", false);
+    }
+
+    const total2 = Math.round((total + Number.EPSILON) * 100) / 100;
+    document.getElementById("detailBadge").textContent = `合计：${fmt(total2)}`;
+    document.getElementById("detailSum").textContent = fmt(total2);
+
+    save();
+    render();
+  }
+
+  /* 实际/已付：添加明细 */
+  document.getElementById("btnAddNormalDetail").addEventListener("click", ()=>{
+    if(!detailCtx) return;
+    const r = rows.find(x=>x.id===detailCtx.rowId);
+    if(!r) return;
+    const cfg = kindCfg(detailCtx.kind);
+    if(cfg.split) return;
+
+    const date = document.getElementById("dDate").value;
+    const note = document.getElementById("dNote").value.trim();
+    const expr = document.getElementById("dExpr").value.trim();
+    if(!expr) return;
+
+    let value = 0;
+    try{ value = evalPlusMinus(expr); }catch{ return; }
+
+    r[cfg.listKey] = r[cfg.listKey] || [];
+    r[cfg.listKey].unshift({ id:uid(), date:date||"", note, expr, value });
+
+    document.getElementById("dNote").value = "";
+    document.getElementById("dExpr").value = "";
+    renderDetail();
+  });
+
+  /* 材料/人工：负责人输入（每人：明细+公式） */
+  function renderOwnerInputs(r){
+    ensureOwners(r);
+    ownerRows.innerHTML = "";
+
+    for(const name of r.owners){
+      const div = document.createElement("div");
+      div.className = "ownerRow";
+      div.setAttribute("data-owner", name);
+      div.innerHTML = `
+        <div class="name">
+          <span>${esc(name)}</span>
+          <button class="delOwner" type="button" title="删除负责人" data-del-owner="${esc(name)}">&times;</button>
+        </div>
+
+        <input type="text" class="noteInp ownerNote" data-owner="${esc(name)}" placeholder="明细（如：车费/材料）" />
+        <input type="text" class="exprInp ownerExpr" data-owner="${esc(name)}" placeholder="金额公式：20000+5000-300" />
+        <div class="sum" data-owner-sum="${esc(name)}">${fmt(0)}</div>
+      `;
+      ownerRows.appendChild(div);
+    }
+
+    ownerRows.querySelectorAll('input[placeholder]').forEach(hidePlaceholderOnFocus);
+  }
+
+  ownerRows.addEventListener("input", (e)=>{
+    const t = e.target;
+    if(!(t && t.classList && t.classList.contains("ownerExpr"))) return;
+    const owner = t.getAttribute("data-owner");
+    let v = 0;
+    try{ v = evalPlusMinus(t.value); }catch{ v = 0; }
+    const sumEl = ownerRows.querySelector(`[data-owner-sum="${CSS.escape(owner)}"]`);
+    if(sumEl) sumEl.textContent = fmt(v);
+  });
+
+  ownerRows.addEventListener("click", (e)=>{
+    const btn = e.target?.closest?.("[data-del-owner]");
+    if(!btn || !detailCtx) return;
+    const r = rows.find(x=>x.id===detailCtx.rowId);
+    if(!r) return;
+    const name = btn.getAttribute("data-del-owner");
+    r.owners = (r.owners||[]).filter(x => x !== name); // ✅ 允许删到空
+    renderOwnerInputs(r);
+    renderDetail();
+  });
+
+  document.getElementById("btnAddOwner").addEventListener("click", ()=>{
+    if(!detailCtx) return;
+    const r = rows.find(x=>x.id===detailCtx.rowId);
+    if(!r) return;
+    const name = prompt("请输入负责人姓名：", "");
+    if(!name) return;
+    const n = name.trim();
+    if(!n) return;
+    ensureOwners(r);
+    if(r.owners.includes(n)) return;
+    r.owners.push(n);
+    renderOwnerInputs(r);
+    renderDetail();
+  });
+
+  function collectPartsFromInputs(r){
+    const parts = {};
+    for(const name of (r.owners||[])){
+      const noteInp = ownerRows.querySelector(`input.ownerNote[data-owner="${CSS.escape(name)}"]`);
+      const exprInp = ownerRows.querySelector(`input.ownerExpr[data-owner="${CSS.escape(name)}"]`);
+
+      const note = String(noteInp?.value || "").trim();
+      const expr = String(exprInp?.value || "").trim();
+
+      let value = 0;
+      try{ value = evalPlusMinus(expr || "0"); }catch{ value = 0; }
+
+      parts[name] = { note, expr, value };
+    }
+    return parts;
+  }
+
+  btnAddSplitRow.addEventListener("click", ()=>{
+    if(!detailCtx) return;
+    const r = rows.find(x=>x.id===detailCtx.rowId);
+    if(!r) return;
+    const cfg = kindCfg(detailCtx.kind);
+    if(!cfg.split) return;
+
+    ensureOwners(r);
+    if((r.owners||[]).length === 0) return; // ✅ 没负责人就不添加
+
+    const date = document.getElementById("dDate").value || "";
+    const parts = collectPartsFromInputs(r);
+    const total = sumParts(parts, r.owners);
+
+    if(total === 0) return;
+
+    r[cfg.listKey] = r[cfg.listKey] || [];
+    r[cfg.listKey].unshift({
+      id: uid(),
+      date,
+      parts,
+      value: total
+    });
+
+    // 清空输入
+    for(const name of r.owners){
+      const noteInp = ownerRows.querySelector(`input.ownerNote[data-owner="${CSS.escape(name)}"]`);
+      const exprInp = ownerRows.querySelector(`input.ownerExpr[data-owner="${CSS.escape(name)}"]`);
+      if(noteInp) noteInp.value = "";
+      if(exprInp) exprInp.value = "";
+      const sumEl = ownerRows.querySelector(`[data-owner-sum="${CSS.escape(name)}"]`);
+      if(sumEl) sumEl.textContent = fmt(0);
+    }
+
+    renderDetail();
+  });
+
+  /* 上传图片：只用于实际金额 */
+  function fileToDataUrl(file){
+    return new Promise((resolve,reject)=>{
+      const fr = new FileReader();
+      fr.onload = ()=>resolve(fr.result);
+      fr.onerror = reject;
+      fr.readAsDataURL(file);
+    });
+  }
+  function dataURLtoBlob(dataUrl){
+    const [meta, b64] = String(dataUrl).split(",");
+    const mime = (meta.match(/data:([^;]+);base64/)||[])[1] || "application/octet-stream";
+    const bin = atob(b64 || "");
+    const arr = new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++) arr[i] = bin.charCodeAt(i);
+    return new Blob([arr], {type:mime});
+  }
+
+  function renderActualImages(){
+    if(!detailCtx) return;
+    const r = rows.find(x=>x.id===detailCtx.rowId);
+    if(!r) return;
+    imgList.innerHTML = "";
+    const imgs = r.actualImages || [];
+    for(const it of imgs){
+      const div = document.createElement("div");
+      div.className = "imgbox";
+      div.setAttribute("data-open-img", it.id);
+      div.innerHTML = `
+        <button class="del" type="button" title="删除" data-del-img="${it.id}">&times;</button>
+        <img src="${it.dataUrl}" alt="">
+        <div class="cap">${esc(it.name||"")}</div>
+      `;
+      imgList.appendChild(div);
+    }
+  }
+
+  imgInput.addEventListener("change", async (e)=>{
+    if(!detailCtx) return;
+    const cfg = kindCfg(detailCtx.kind);
+    if(!cfg.upload) return;
+
+    const r = rows.find(x=>x.id===detailCtx.rowId);
+    if(!r) return;
+
+    const files = Array.from(e.target.files || []);
+    if(!files.length) return;
+
+    r.actualImages = Array.isArray(r.actualImages) ? r.actualImages : [];
+    for(const f of files){
+      const dataUrl = await fileToDataUrl(f);
+      r.actualImages.unshift({
+        id: uid(),
+        name: f.name,
+        type: f.type || "application/octet-stream",
+        dataUrl
+      });
+    }
+    e.target.value = "";
+    renderActualImages();
+    save();
+  });
+
+  imgList.addEventListener("click", (e)=>{
+    if(!detailCtx) return;
+    const cfg = kindCfg(detailCtx.kind);
+    if(!cfg.upload) return;
+
+    const r = rows.find(x=>x.id===detailCtx.rowId);
+    if(!r) return;
+
+    const delBtn = e.target?.closest?.("[data-del-img]");
+    if(delBtn){
+      e.preventDefault();
+      e.stopPropagation();
+      const id = delBtn.getAttribute("data-del-img");
+      r.actualImages = (r.actualImages||[]).filter(x=>x.id!==id);
+      renderActualImages();
+      save();
+      return;
+    }
+
+    const openId = e.target?.closest?.("[data-open-img]")?.getAttribute?.("data-open-img");
+    if(openId){
+      const img = (r.actualImages||[]).find(x=>x.id===openId);
+      if(!img) return;
+      const blob = dataURLtoBlob(img.dataUrl);
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener,noreferrer");
+      setTimeout(()=>URL.revokeObjectURL(url), 60_000);
+    }
+  });
+
+  /* 清空/删除/打开 */
+  document.getElementById("btnClearDetail").addEventListener("click", ()=>{
+    if(!detailCtx) return;
+    const r = rows.find(x=>x.id===detailCtx.rowId);
+    if(!r) return;
+    const cfg = kindCfg(detailCtx.kind);
+    r[cfg.listKey] = [];
+    if(cfg.upload) r.actualImages = [];
+    if(cfg.upload) renderActualImages();
+    renderDetail();
+  });
+
+  document.addEventListener("click",(e)=>{
+    const delRow = e.target?.getAttribute?.("data-del-row");
+    if(delRow){
+      rows = rows.filter(x=>x.id!==delRow);
+      render();
+      return;
+    }
+
+    const open = e.target?.getAttribute?.("data-open-detail");
+    if(open){
+      openDetail(open, e.target.getAttribute("data-kind"));
+      return;
+    }
+
+    const delDetailId = e.target?.getAttribute?.("data-del-detail");
+    if(delDetailId && detailCtx){
+      const r = rows.find(x=>x.id===detailCtx.rowId);
+      if(!r) return;
+      const cfg = kindCfg(detailCtx.kind);
+      r[cfg.listKey] = (r[cfg.listKey]||[]).filter(x=>x.id!==delDetailId);
+      renderDetail();
+      return;
+    }
+  });
+
+  /* 关闭客户窗 */
+  document.getElementById("btnCloseClient").addEventListener("click", ()=>document.getElementById("overlayClient").classList.remove("open"));
+
+  /* 初次渲染 */
   render();
 })();
 </script>
