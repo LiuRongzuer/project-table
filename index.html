@@ -539,7 +539,24 @@
 <script>
 (() => {
   "use strict";
+  function showDiag(msg){
+  let el = document.getElementById("diagBox");
+  if(!el){
+    el = document.createElement("pre");
+    el.id = "diagBox";
+    el.style.cssText = "position:fixed;left:10px;right:10px;bottom:10px;max-height:40vh;overflow:auto;z-index:9999;background:#111827;color:#fff;padding:10px;border-radius:10px;font-size:12px;white-space:pre-wrap;";
+    document.body.appendChild(el);
+  }
+  el.textContent += msg + "\n";
+}
 
+window.addEventListener("error", (e)=>{
+  showDiag("JS错误: " + (e.message || e.error) + " @ " + (e.filename||"") + ":" + (e.lineno||"") + ":" + (e.colno||""));
+});
+
+window.addEventListener("unhandledrejection", (e)=>{
+  showDiag("Promise错误: " + (e.reason?.message || e.reason));
+});
   const LS_KEY = "sheet_center_final_owner_note_v5_allow_empty_owners";
 // ===== 云同步（Cloudflare Worker + KV）=====
 const CLOUD_CFG_KEY = "project_table_cloud_cfg_v1";
@@ -1511,6 +1528,13 @@ function closeCloudModal(){
   /* 关闭客户窗 */
   document.getElementById("btnCloseClient").addEventListener("click", ()=>document.getElementById("overlayClient").classList.remove("open"));
   // ===== 云同步按钮绑定（只执行一次）=====
+  showDiag("开始绑定云按钮…");
+
+const ids = ["btnCloudSetup","btnCloudTest","btnCloudLoad","btnCloudSave","btnCloudSaveCfg","btnCloseCloud","overlayCloud","cloudEndpoint","cloudKey","cloudSecret"];
+for(const id of ids){
+  const ok = !!document.getElementById(id);
+  showDiag((ok ? "OK  " : "MISS") + " #" + id);
+}
 document.getElementById("btnCloudSetup").addEventListener("click", openCloudModal);
 document.getElementById("btnCloseCloud").addEventListener("click", closeCloudModal);
 document.getElementById("overlayCloud").addEventListener("click", (e)=>{
