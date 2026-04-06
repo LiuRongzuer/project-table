@@ -1549,52 +1549,68 @@ document.getElementById("btnCloudSaveCfg").addEventListener("click", ()=>{
   closeCloudModal();
   alert("云同步设置已保存（只在本机浏览器）。");
 });
-
 document.getElementById("btnCloudTest").addEventListener("click", async ()=>{
+  showDiag("点击：测试连接");
   try{
     cloudCfg.endpoint = (document.getElementById("cloudEndpoint").value || "").trim();
     cloudCfg.key = (document.getElementById("cloudKey").value || "main").trim() || "main";
     cloudCfg.secret = document.getElementById("cloudSecret").value || "";
-    await cloudLoad();
+    showDiag("配置: endpoint=" + cloudCfg.endpoint + " key=" + cloudCfg.key + " secretLen=" + (cloudCfg.secret||"").length);
+
+    const data = await cloudLoad();
+    showDiag("测试连接成功，云端返回类型=" + (data==null?"null":typeof data));
     alert("连接成功（能读取云端）。");
   }catch(err){
+    showDiag("测试连接失败: " + (err?.message || err));
     alert("连接失败：" + (err?.message || err));
   }
 });
 
-document.getElementById("btnCloudLoad").addEventListener("click", async ()=>{
-  try{
-    if(!cloudCfg.secret){
-      alert("请先点“云同步设置”填写 SYNC_SECRET。");
-      return;
-    }
-    const data = await cloudLoad();
-    if(!data){
-      alert("云端暂无数据。");
-      return;
-    }
-    rows = data;
-    localStorage.setItem(LS_KEY, JSON.stringify(rows)); // 加载后先落本地
-    render();
-    alert("已从云端加载。");
-  }catch(err){
-    alert("云端加载失败：" + (err?.message || err));
-  }
-});
-
 document.getElementById("btnCloudSave").addEventListener("click", async ()=>{
+  showDiag("点击：云端保存");
   try{
     if(!cloudCfg.secret){
+      showDiag("云端保存：secret 为空");
       alert("请先点“云同步设置”填写 SYNC_SECRET。");
       return;
     }
+    showDiag("开始保存… rowsLen=" + (Array.isArray(rows)?rows.length:"NA"));
     await cloudSave(rows);
+    showDiag("云端保存成功");
     alert("已保存到云端。");
   }catch(err){
+    showDiag("云端保存失败: " + (err?.message || err));
     alert("云端保存失败：" + (err?.message || err));
   }
 });
 
+document.getElementById("btnCloudLoad").addEventListener("click", async ()=>{
+  showDiag("点击：云端加载");
+  try{
+    if(!cloudCfg.secret){
+      showDiag("云端加载：secret 为空");
+      alert("请先点“云同步设置”填写 SYNC_SECRET。");
+      return;
+    }
+    showDiag("开始加载…");
+    const data = await cloudLoad();
+    showDiag("加载返回: " + (data==null?"null":("type="+typeof data + (Array.isArray(data) ? " len="+data.length : ""))));
+
+    if(!data){
+      showDiag("云端暂无数据");
+      alert("云端暂无数据。");
+      return;
+    }
+    rows = data;
+    localStorage.setItem(LS_KEY, JSON.stringify(rows));
+    render();
+    showDiag("已从云端加载并渲染");
+    alert("已从云端加载。");
+  }catch(err){
+    showDiag("云端加载失败: " + (err?.message || err));
+    alert("云端加载失败：" + (err?.message || err));
+  }
+});
 // 先加载本机保存的云配置
 loadCloudCfg();
   /* 初次渲染 */
