@@ -97,7 +97,7 @@
       justify-content:center;
     }
 
-    /* ✅ 去掉 number spinner */
+    /* ? 去掉 number spinner */
     input[type="number"]::-webkit-outer-spin-button,
     input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
     input[type="number"]{ -moz-appearance:textfield; appearance:textfield; }
@@ -249,7 +249,7 @@
       margin-top:10px;
     }
 
-    /* ✅ 更柔和的负责人输入行 */
+    /* ? 更柔和的负责人输入行 */
     .ownerRow{
       display:flex;
       gap:10px;
@@ -378,6 +378,9 @@
       <button id="btnCloudSetup">云同步设置</button>
       <button id="btnCloudLoad">云端加载</button>
       <button id="btnCloudSave">云端保存</button>
+      <button id="btnExport">导出JSON</button>
+      <button id="btnImport">导入JSON</button>
+      <input id="importFile" type="file" accept="application/json" style="display:none" />
     </div>
 
     <div class="tableWrap">
@@ -539,31 +542,69 @@
 <script>
 (() => {
   "use strict";
-  function showDiag(msg){
-  let el = document.getElementById("diagBox");
-  if(!el){
-    el = document.createElement("pre");
-    el.id = "diagBox";
-    el.style.cssText = "position:fixed;left:10px;right:10px;bottom:10px;max-height:40vh;overflow:auto;z-index:9999;background:#111827;color:#fff;padding:10px;border-radius:10px;font-size:12px;white-space:pre-wrap;";
-    document.body.appendChild(el);
-  }
-  el.textContent += msg + "\n";
-}
 
-window.addEventListener("error", (e)=>{
-  showDiag("JS错误: " + (e.message || e.error) + " @ " + (e.filename||"") + ":" + (e.lineno||"") + ":" + (e.colno||""));
-});
-
-window.addEventListener("unhandledrejection", (e)=>{
-  showDiag("Promise错误: " + (e.reason?.message || e.reason));
-});
   const LS_KEY = "sheet_center_final_owner_note_v5_allow_empty_owners";
 // ===== 云同步（Cloudflare Worker + KV）=====
 const CLOUD_CFG_KEY = "project_table_cloud_cfg_v1";
 const CLOUD_DEFAULT_ENDPOINT = "https://dawn-truth-af27project-table-api.8206230527.workers.dev";
 
 let cloudCfg = { endpoint: CLOUD_DEFAULT_ENDPOINT, key: "main", secret: "" };
+function downloadText(filename, text){
+  const blob = new Blob([text], {type:"application/json;charset=utf-8"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 60_000);
+}
 
+document.getElementById("btnExport").addEventListener("click", ()=>{
+  // 只导出核心数据 rows（包含明细/图片dataUrl也会一起带走）
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,"0");
+  const dd = String(d.getDate()).padStart(2,"0");
+  const fn = `项目表备份_${y}-${m}-${dd}.json`;
+
+  downloadText(fn, JSON.stringify(rows, null, 2));
+});
+
+document.getElementById("btnImport").addEventListener("click", ()=>{
+  document.getElementById("importFile").click();
+});
+
+document.getElementById("importFile").addEventListener("change", async (e)=>{
+  const f = e.target.files?.[0];
+  e.target.value = "";
+  if(!f) return;
+
+  try{
+    const text = await f.text();
+    const data = JSON.parse(text);
+
+    if(!Array.isArray(data)){
+      alert("导入失败：文件格式不对（应为数组）。");
+      return;
+    }
+
+    // 覆盖本地数据
+    rows = data;
+    save();
+    render();
+
+    // 可选：导入后自动上云（如果已配置 secret）
+    if(cloudCfg?.secret){
+      try{ await cloudSave(rows); }catch{}
+    }
+
+    alert("导入成功。");
+  }catch(err){
+    alert("导入失败：" + (err?.message || err));
+  }
+});
 function loadCloudCfg(){
   try{
     const raw = localStorage.getItem(CLOUD_CFG_KEY);
@@ -584,26 +625,26 @@ function fetchWithTimeout(url, options = {}, ms = 10000){
     .finally(() => clearTimeout(t));
 }
 async function cloudLoad(){
-const res = await fetchWithTimeout(
-  cloudUrl(`/api/load?key=${encodeURIComponent(cloudCfg.key || "main")}`),
-  { headers: { "X-Auth": cloudCfg.secret || "" } },
-  10000
-);
+  const res = await fetchWithTimeout(
+    cloudUrl(`/api/load?key=${encodeURIComponent(cloudCfg.key || "main")}`),
+    { headers: { "X-Auth": cloudCfg.secret || "" } },
+    10000
+  );
   const json = await res.json().catch(()=> ({}));
   if(!res.ok || !json.ok) throw new Error(json.error || `load failed ${res.status}`);
   return json.data;
 }
 
 async function cloudSave(payload){
-const res = await fetchWithTimeout(
-  cloudUrl(`/api/save?key=${encodeURIComponent(cloudCfg.key || "main")}`),
-  {
-    method: "POST",
-    headers: { "Content-Type":"application/json", "X-Auth": cloudCfg.secret || "" },
-    body: JSON.stringify(payload)
-  },
-  10000
-);
+  const res = await fetchWithTimeout(
+    cloudUrl(`/api/save?key=${encodeURIComponent(cloudCfg.key || "main")}`),
+    {
+      method: "POST",
+      headers: { "Content-Type":"application/json", "X-Auth": cloudCfg.secret || "" },
+      body: JSON.stringify(payload)
+    },
+    10000
+  );
   const json = await res.json().catch(()=> ({}));
   if(!res.ok || !json.ok) throw new Error(json.error || `save failed ${res.status}`);
   return true;
@@ -720,33 +761,7 @@ function closeCloudModal(){
 
   const DEFAULT_OWNERS = ["广学","刘蜜"];
 
-  const defaultRows = [{
-    id: uid(),
-    date: "2026-01-08",
-    client: "苏启",
-    content: "益田假日商城",
-    invoiceTax: 0,
-    actualDetails: [{id:uid(), date:"2026-01-08", note:"报价", expr:"5500", value:5500}],
-    paidDetails:   [{id:uid(), date:"2026-01-08", note:"付款", expr:"5500", value:5500}],
-    materialDetails:[{
-      id:uid(), date:"2026-01-08",
-      parts:{
-        "广学":{note:"旗737+旗200", expr:"737+200", value:937},
-        "刘蜜":{note:"车费", expr:"48", value:48}
-      },
-      value:985
-    }],
-    laborDetails:  [{
-      id:uid(), date:"2026-01-08",
-      parts:{
-        "广学":{note:"搭建", expr:"1000", value:1000},
-        "刘蜜":{note:"", expr:"0", value:0}
-      },
-      value:1000
-    }],
-    owners: structuredClone(DEFAULT_OWNERS),
-    actualImages: []
-  }];
+const defaultRows = [];
 
   function load(){
     try{
@@ -764,7 +779,7 @@ function closeCloudModal(){
         r.materialDetails = Array.isArray(r.materialDetails) ? r.materialDetails : [];
         r.laborDetails = Array.isArray(r.laborDetails) ? r.laborDetails : [];
 
-        // ✅ 允许空负责人：只保证是数组
+        // ? 允许空负责人：只保证是数组
         if(!Array.isArray(r.owners)) r.owners = structuredClone(DEFAULT_OWNERS);
 
         r.actualImages = Array.isArray(r.actualImages) ? r.actualImages : [];
@@ -808,7 +823,7 @@ function closeCloudModal(){
   let rows = load();
   function save(){
     localStorage.setItem(LS_KEY, JSON.stringify(rows));
-    scheduleCloudAutoSave(); // ✅ 模式B：本地保存后自动延迟云端保存
+    scheduleCloudAutoSave(); // ? 模式B：本地保存后自动延迟云端保存
   }
   /* 主表渲染 */
   const tbody = document.getElementById("tbody");
@@ -894,6 +909,7 @@ function closeCloudModal(){
       owners: structuredClone(DEFAULT_OWNERS),
       actualImages: []
     });
+    save();
     render();
   });
 
@@ -1077,7 +1093,7 @@ function closeCloudModal(){
     }
   }
 
-  // ✅ 允许空负责人：只保证是数组，不再补默认
+  // ? 允许空负责人：只保证是数组，不再补默认
   function ensureOwners(r){
     if(!Array.isArray(r.owners)) r.owners = [];
   }
@@ -1117,7 +1133,7 @@ function closeCloudModal(){
     overlayDetail.classList.remove("open");
     detailCtx = null;
     imgInput.value = "";
-    render(); // ✅ 关闭明细弹窗时刷新主表
+    render(); // ? 关闭明细弹窗时刷新主表
   }
   document.getElementById("btnCloseDetail").addEventListener("click", closeDetail);
   document.getElementById("btnDoneDetail").addEventListener("click", closeDetail);
@@ -1192,7 +1208,7 @@ function closeCloudModal(){
       ensureOwners(r);
       const owners = r.owners || [];
 
-      // ✅ 没有负责人：禁用添加 + 提示
+      // ? 没有负责人：禁用添加 + 提示
       if(owners.length === 0){
         btnAddSplitRow.disabled = true;
         setOwnerBadge("请先添加负责人", true);
@@ -1328,7 +1344,7 @@ function closeCloudModal(){
     const r = rows.find(x=>x.id===detailCtx.rowId);
     if(!r) return;
     const name = btn.getAttribute("data-del-owner");
-    r.owners = (r.owners||[]).filter(x => x !== name); // ✅ 允许删到空
+    r.owners = (r.owners||[]).filter(x => x !== name); // ? 允许删到空
     renderOwnerInputs(r);
     renderDetail();
   });
@@ -1373,7 +1389,7 @@ function closeCloudModal(){
     if(!cfg.split) return;
 
     ensureOwners(r);
-    if((r.owners||[]).length === 0) return; // ✅ 没负责人就不添加
+    if((r.owners||[]).length === 0) return; // ? 没负责人就不添加
 
     const date = document.getElementById("dDate").value || "";
     const parts = collectPartsFromInputs(r);
@@ -1511,6 +1527,7 @@ function closeCloudModal(){
     const delRow = e.target?.getAttribute?.("data-del-row");
     if(delRow){
       rows = rows.filter(x=>x.id!==delRow);
+      save();
       render();
       return;
     }
@@ -1535,13 +1552,6 @@ function closeCloudModal(){
   /* 关闭客户窗 */
   document.getElementById("btnCloseClient").addEventListener("click", ()=>document.getElementById("overlayClient").classList.remove("open"));
   // ===== 云同步按钮绑定（只执行一次）=====
-  showDiag("开始绑定云按钮…");
-
-const ids = ["btnCloudSetup","btnCloudTest","btnCloudLoad","btnCloudSave","btnCloudSaveCfg","btnCloseCloud","overlayCloud","cloudEndpoint","cloudKey","cloudSecret"];
-for(const id of ids){
-  const ok = !!document.getElementById(id);
-  showDiag((ok ? "OK  " : "MISS") + " #" + id);
-}
 document.getElementById("btnCloudSetup").addEventListener("click", openCloudModal);
 document.getElementById("btnCloseCloud").addEventListener("click", closeCloudModal);
 document.getElementById("overlayCloud").addEventListener("click", (e)=>{
@@ -1556,67 +1566,52 @@ document.getElementById("btnCloudSaveCfg").addEventListener("click", ()=>{
   closeCloudModal();
   alert("云同步设置已保存（只在本机浏览器）。");
 });
+
 document.getElementById("btnCloudTest").addEventListener("click", async ()=>{
-  showDiag("点击：测试连接");
   try{
     cloudCfg.endpoint = (document.getElementById("cloudEndpoint").value || "").trim();
     cloudCfg.key = (document.getElementById("cloudKey").value || "main").trim() || "main";
     cloudCfg.secret = document.getElementById("cloudSecret").value || "";
-    showDiag("配置: endpoint=" + cloudCfg.endpoint + " key=" + cloudCfg.key + " secretLen=" + (cloudCfg.secret||"").length);
-
-    const data = await cloudLoad();
-    showDiag("测试连接成功，云端返回类型=" + (data==null?"null":typeof data));
+    await cloudLoad();
     alert("连接成功（能读取云端）。");
   }catch(err){
-    showDiag("测试连接失败: " + (err?.name ? (err.name + ": " + err.message) : (err?.message || err)));
     alert("连接失败：" + (err?.message || err));
-  }
-});
-document.getElementById("btnCloudSave").addEventListener("click", async ()=>{
-  showDiag("点击：云端保存");
-  try{
-    if(!cloudCfg.secret){
-      showDiag("云端保存：secret 为空");
-      alert("请先点“云同步设置”填写 SYNC_SECRET。");
-      return;
-    }
-    showDiag("开始保存… rowsLen=" + (Array.isArray(rows)?rows.length:"NA"));
-    await cloudSave(rows);
-    showDiag("云端保存成功");
-    alert("已保存到云端。");
-  }catch(err){
-    showDiag("云端保存失败: " + (err?.message || err));
-    alert("云端保存失败：" + (err?.message || err));
   }
 });
 
 document.getElementById("btnCloudLoad").addEventListener("click", async ()=>{
-  showDiag("点击：云端加载");
   try{
     if(!cloudCfg.secret){
-      showDiag("云端加载：secret 为空");
       alert("请先点“云同步设置”填写 SYNC_SECRET。");
       return;
     }
-    showDiag("开始加载…");
     const data = await cloudLoad();
-    showDiag("加载返回: " + (data==null?"null":("type="+typeof data + (Array.isArray(data) ? " len="+data.length : ""))));
-
     if(!data){
-      showDiag("云端暂无数据");
       alert("云端暂无数据。");
       return;
     }
     rows = data;
-    localStorage.setItem(LS_KEY, JSON.stringify(rows));
+    localStorage.setItem(LS_KEY, JSON.stringify(rows)); // 加载后先落本地
     render();
-    showDiag("已从云端加载并渲染");
     alert("已从云端加载。");
   }catch(err){
-    showDiag("云端加载失败: " + (err?.message || err));
     alert("云端加载失败：" + (err?.message || err));
   }
 });
+
+document.getElementById("btnCloudSave").addEventListener("click", async ()=>{
+  try{
+    if(!cloudCfg.secret){
+      alert("请先点“云同步设置”填写 SYNC_SECRET。");
+      return;
+    }
+    await cloudSave(rows);
+    alert("已保存到云端。");
+  }catch(err){
+    alert("云端保存失败：" + (err?.message || err));
+  }
+});
+
 // 先加载本机保存的云配置
 loadCloudCfg();
   /* 初次渲染 */
