@@ -577,26 +577,33 @@ function cloudUrl(path){
   const base = String(cloudCfg.endpoint || "").trim().replace(/\/+$/,"");
   return base + path;
 }
-
+function fetchWithTimeout(url, options = {}, ms = 10000){
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  return fetch(url, { ...options, signal: ctrl.signal })
+    .finally(() => clearTimeout(t));
+}
 async function cloudLoad(){
-  const res = await fetch(
-    cloudUrl(`/api/load?key=${encodeURIComponent(cloudCfg.key || "main")}`),
-    { headers: { "X-Auth": cloudCfg.secret || "" } }
-  );
+const res = await fetchWithTimeout(
+  cloudUrl(`/api/load?key=${encodeURIComponent(cloudCfg.key || "main")}`),
+  { headers: { "X-Auth": cloudCfg.secret || "" } },
+  10000
+);
   const json = await res.json().catch(()=> ({}));
   if(!res.ok || !json.ok) throw new Error(json.error || `load failed ${res.status}`);
   return json.data;
 }
 
 async function cloudSave(payload){
-  const res = await fetch(
-    cloudUrl(`/api/save?key=${encodeURIComponent(cloudCfg.key || "main")}`),
-    {
-      method: "POST",
-      headers: { "Content-Type":"application/json", "X-Auth": cloudCfg.secret || "" },
-      body: JSON.stringify(payload)
-    }
-  );
+const res = await fetchWithTimeout(
+  cloudUrl(`/api/save?key=${encodeURIComponent(cloudCfg.key || "main")}`),
+  {
+    method: "POST",
+    headers: { "Content-Type":"application/json", "X-Auth": cloudCfg.secret || "" },
+    body: JSON.stringify(payload)
+  },
+  10000
+);
   const json = await res.json().catch(()=> ({}));
   if(!res.ok || !json.ok) throw new Error(json.error || `save failed ${res.status}`);
   return true;
@@ -1561,11 +1568,10 @@ document.getElementById("btnCloudTest").addEventListener("click", async ()=>{
     showDiag("测试连接成功，云端返回类型=" + (data==null?"null":typeof data));
     alert("连接成功（能读取云端）。");
   }catch(err){
-    showDiag("测试连接失败: " + (err?.message || err));
+    showDiag("测试连接失败: " + (err?.name ? (err.name + ": " + err.message) : (err?.message || err)));
     alert("连接失败：" + (err?.message || err));
   }
 });
-
 document.getElementById("btnCloudSave").addEventListener("click", async ()=>{
   showDiag("点击：云端保存");
   try{
