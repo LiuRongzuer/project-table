@@ -249,7 +249,7 @@
       margin-top:10px;
     }
 
-    /* ? 更柔和的负责人输入行 */
+    /* 更柔和的负责人输入行 */
     .ownerRow{
       display:flex;
       gap:10px;
@@ -546,8 +546,7 @@
   const LS_KEY = "sheet_center_final_owner_note_v5_allow_empty_owners";
 // ===== 云同步（Cloudflare Worker + KV）=====
 const CLOUD_CFG_KEY = "project_table_cloud_cfg_v1";
-const CLOUD_DEFAULT_ENDPOINT = "https://dawn-truth-af27project-table-api.8206230527.workers.dev";
-
+const CLOUD_DEFAULT_ENDPOINT = "http://121.40.145.232:3000";
 let cloudCfg = { endpoint: CLOUD_DEFAULT_ENDPOINT, key: "main", secret: "" };
 function downloadText(filename, text){
   const blob = new Blob([text], {type:"application/json;charset=utf-8"});
