@@ -103,11 +103,16 @@
     input[type="number"]{ -moz-appearance:textfield; appearance:textfield; }
 
     /* 弹窗 */
-    .overlay{
-      position:fixed;inset:0;background:rgba(15,23,42,.45);
-      display:none;align-items:flex-start;justify-content:center;padding:24px;
-      z-index:999;
-    }
+.overlay{
+  position:fixed;
+  inset:0;
+  background:rgba(15,23,42,.45);
+  display:none;
+  align-items:flex-start;
+  justify-content:center;
+  padding:24px;
+  z-index:999;
+}
     .overlay.open{display:flex;}
 
     .modal{
@@ -121,8 +126,8 @@
       left:50%;
       top:72px;
       transform:translate3d(-50%,0,0);
-      will-change:transform;
-      touch-action:none;
+      z-index:1001;
+     pointer-events:auto;
     }
 
     .modal header{
@@ -369,6 +374,9 @@
     }
     .cellRich .n{font-weight:800;color:var(--text);}
     .cellRich .v{color:var(--muted);font-variant-numeric:tabular-nums;margin-top:2px;}
+      html, body { height: 100%; width: 100%; margin: 0; padding: 0; }
+    body { min-height: 100vh; height: 100vh; }
+    .wrap { width: 100vw; min-height: 100vh; box-sizing: border-box; }
   </style>
 </head>
 <body>
@@ -539,11 +547,27 @@
     </div>
   </div>
 </div>
+<div id="myAlert" style="display:none;position:fixed;left:50%;top:30%;transform:translate(-50%,-50%);
+z-index:999999;min-width:220px;padding:24px 30px;font-size:17px;color:#333;background:#fff;border-radius:12px;
+box-shadow:0 8px 32px rgba(0,0,0,0.12);border:1px solid #ccc;text-align:center;"></div>
+<!-- 旋转 loading 动画 -->
+<div id="myLoading"
+     style="display:none; position:fixed;left:50%;top:40%;transform:translate(-50%,-50%);
+            z-index:10000;pointer-events:none;">
+  <div style="width:48px;height:48px;display:flex;align-items:center;justify-content:center;">
+    <svg width="48" height="48" viewBox="0 0 60 60" style="animation:rot 1s linear infinite;">
+      <circle cx="30" cy="30" r="22" stroke="#2563eb" stroke-width="6" fill="none" opacity="0.2"/>
+      <path d="M52,30A22,22 0 0,1 30,52" stroke="#2563eb" stroke-width="6" fill="none" stroke-linecap="round"/>
+    </svg>
+  </div>
+</div>
+<style>
+@keyframes rot { 100% { transform: rotate(360deg); } }
+</style>
 <script>
 (() => {
-  "use strict";
-
   const LS_KEY = "sheet_center_final_owner_note_v5_allow_empty_owners";
+  "use strict";
 // ===== 云同步（Cloudflare Worker + KV）=====
 const CLOUD_CFG_KEY = "project_table_cloud_cfg_v1";
 const CLOUD_DEFAULT_ENDPOINT = "http://121.40.145.232:3000";
@@ -585,7 +609,7 @@ document.getElementById("importFile").addEventListener("change", async (e)=>{
     const data = JSON.parse(text);
 
     if(!Array.isArray(data)){
-      alert("导入失败：文件格式不对（应为数组）。");
+      showAlert("导入失败：文件格式不对（应为数组）。");
       return;
     }
 
@@ -599,11 +623,26 @@ document.getElementById("importFile").addEventListener("change", async (e)=>{
       try{ await cloudSave(rows); }catch{}
     }
 
-    alert("导入成功。");
+    showAlert("导入成功。");
   }catch(err){
-    alert("导入失败：" + (err?.message || err));
+    showAlert("导入失败：" + (err?.message || err));
   }
 });
+function showLoading() {
+  document.getElementById('myLoading').style.display = 'block';
+}
+function hideLoading() {
+  document.getElementById('myLoading').style.display = 'none';
+}
+function showAlert(msg, ms = 1600) {
+  const div = document.getElementById('myAlert');
+  if (!div) { alert(msg); return; } // 万一没插入div就原生alert兜底
+  div.innerText = msg;
+  div.style.display = 'block';
+  div.onclick = function() { div.style.display='none'; };
+  clearTimeout(div._timer);
+  div._timer = setTimeout(() => { div.style.display='none'; }, ms);
+}
 function loadCloudCfg(){
   try{
     const raw = localStorage.getItem(CLOUD_CFG_KEY);
@@ -930,12 +969,7 @@ const defaultRows = [];
     render();
   });
 
-  document.addEventListener("focusin",(e)=>{
-    const t = e.target;
-    if(t && t.tagName === "INPUT" && t.classList.contains("cell")){
-      if(t.type !== "date") setTimeout(()=>t.select?.(), 0);
-    }
-  });
+
 
   document.addEventListener("click", (e)=>{
     const t = e.target;
@@ -1563,51 +1597,63 @@ document.getElementById("btnCloudSaveCfg").addEventListener("click", ()=>{
   cloudCfg.secret = document.getElementById("cloudSecret").value || "";
   saveCloudCfg();
   closeCloudModal();
-  alert("云同步设置已保存（只在本机浏览器）。");
+  showAlert("云同步设置已保存（只在本机浏览器）。");
 });
 
 document.getElementById("btnCloudTest").addEventListener("click", async ()=>{
+    showLoading();
   try{
     cloudCfg.endpoint = (document.getElementById("cloudEndpoint").value || "").trim();
     cloudCfg.key = (document.getElementById("cloudKey").value || "main").trim() || "main";
     cloudCfg.secret = document.getElementById("cloudSecret").value || "";
     await cloudLoad();
-    alert("连接成功（能读取云端）。");
+    showAlert("连接成功（能读取云端）。");
   }catch(err){
-    alert("连接失败：" + (err?.message || err));
+    showAlert("连接失败：" + (err?.message || err));
+  }
+  finally{
+    hideLoading();
   }
 });
 
 document.getElementById("btnCloudLoad").addEventListener("click", async ()=>{
+  showLoading(); 
   try{
     if(!cloudCfg.secret){
-      alert("请先点“云同步设置”填写 SYNC_SECRET。");
+      showAlert("请先点“云同步设置”填写 SYNC_SECRET。");
       return;
     }
     const data = await cloudLoad();
     if(!data){
-      alert("云端暂无数据。");
+      showAlert("云端暂无数据。");
       return;
     }
     rows = data;
     localStorage.setItem(LS_KEY, JSON.stringify(rows)); // 加载后先落本地
     render();
-    alert("已从云端加载。");
+    showAlert("已从云端加载。");
   }catch(err){
-    alert("云端加载失败：" + (err?.message || err));
+    showAlert("云端加载失败：" + (err?.message || err));
+  }
+  finally{
+    hideLoading(); // <-- 最末尾finally里
   }
 });
 
 document.getElementById("btnCloudSave").addEventListener("click", async ()=>{
+  showLoading();
   try{
     if(!cloudCfg.secret){
-      alert("请先点“云同步设置”填写 SYNC_SECRET。");
+      showAlert("请先点“云同步设置”填写 SYNC_SECRET。");
       return;
     }
     await cloudSave(rows);
-    alert("已保存到云端。");
+    showAlert("已保存到云端。");
   }catch(err){
-    alert("云端保存失败：" + (err?.message || err));
+    showAlert("云端保存失败：" + (err?.message || err));
+  }
+  finally{
+    hideLoading();
   }
 });
 
@@ -1615,6 +1661,18 @@ document.getElementById("btnCloudSave").addEventListener("click", async ()=>{
 loadCloudCfg();
   /* 初次渲染 */
   render();
+  document.addEventListener('focusin', function(event) {
+    const el = event.target;
+    if (
+      el.tagName === 'INPUT' &&
+      el.getAttribute('data-k') === 'invoiceTax'
+    ) {
+      setTimeout(() => {
+        el.select();
+      }, 0);
+    }
+  });
+  
 })();
 </script>
 </body>
