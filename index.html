@@ -570,7 +570,7 @@ box-shadow:0 8px 32px rgba(0,0,0,0.12);border:1px solid #ccc;text-align:center;"
   "use strict";
 // ===== 云同步（Cloudflare Worker + KV）=====
 const CLOUD_CFG_KEY = "project_table_cloud_cfg_v1";
-const CLOUD_DEFAULT_ENDPOINT = "http://121.40.145.232:3000";
+const CLOUD_DEFAULT_ENDPOINT = "https://api.table2.xyz";
 let cloudCfg = { endpoint: CLOUD_DEFAULT_ENDPOINT, key: "main", secret: "" };
 function downloadText(filename, text){
   const blob = new Blob([text], {type:"application/json;charset=utf-8"});
