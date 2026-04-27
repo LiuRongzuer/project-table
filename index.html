@@ -934,7 +934,7 @@ const defaultRows = [];
   }
 
   document.getElementById("btnAddRow").addEventListener("click", ()=>{
-    rows.unshift({
+    rows.push({
       id: uid(),
       date: todayStr(),
       client: "",
